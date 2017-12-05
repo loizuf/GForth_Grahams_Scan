@@ -1,0 +1,55 @@
+/parsepoint { % (line)
+    ( ) % (line) ( )
+    search { % (post) ( ) (pre)
+        exch pop % (y) (x)
+        cvi exch cvi % x y
+    }{ % (no-match)
+        pop exit
+    } ifelse
+} def
+
+/drawpoint { % x y
+    2 dict begin
+    4 setlinewidth
+    1 setlinecap
+    newpath moveto 0 0 rlineto stroke
+    end
+} def
+
+/infile (in.txt) (r) file def % open file
+/buff 128 string def % read buffer
+{
+    infile buff readline {
+        parsepoint
+        drawpoint
+    }{
+        pop exit
+    } ifelse
+} loop
+infile closefile
+
+/infile (out.txt) (r) file def % open file
+/buff 128 string def % read buffer
+/i 0 def
+4 setlinewidth
+1 setlinecap
+newpath
+{
+    infile buff readline {
+        parsepoint
+        i 0 eq
+        {
+            moveto
+        }{
+        pstack
+            lineto
+        } ifelse
+        /i i 1 add def
+    }{
+        pop exit
+    } ifelse
+} loop
+infile closefile
+stroke
+
+showpage
