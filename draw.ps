@@ -16,21 +16,10 @@
     end
 } def
 
-/infile (in.txt) (r) file def % open file
-/buff 128 string def % read buffer
-{
-    infile buff readline {
-        parsepoint
-        drawpoint
-    }{
-        pop exit
-    } ifelse
-} loop
-infile closefile
-
 /infile (out.txt) (r) file def % open file
 /buff 128 string def % read buffer
 /i 0 def
+1 1 0 setrgbcolor
 4 setlinewidth
 1 setlinecap
 newpath
@@ -45,6 +34,21 @@ newpath
             lineto
         } ifelse
         /i i 1 add def
+    }{
+        pop exit
+    } ifelse
+} loop
+infile closefile
+closepath
+stroke
+
+/infile (in.txt) (r) file def % open file
+/buff 128 string def % read buffer
+0 0 0 setrgbcolor
+{
+    infile buff readline {
+        parsepoint
+        drawpoint
     }{
         pop exit
     } ifelse
