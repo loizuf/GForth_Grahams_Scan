@@ -46,6 +46,44 @@
 \ : whichSide ( x1 y1 x2 y2 x y -- x1 y1 x2 y2 x y d )
 \	swap >r >r 2swap 2dup r> swap - r> rot - ;
 
+: split ( str len separator len -- tokens count )
+  here >r 2swap
+  begin
+    2dup 2,             \ save this token ( addr len )
+    2over search        \ find next separator
+  while
+    dup negate  here 2 cells -  +!  \ adjust last token length
+    2over nip /string               \ start next search past separator
+  repeat
+  2drop 2drop
+  r>  here over -   ( tokens length )
+  dup negate allot           \ reclaim dictionary
+  2 cells / ;                \ turn byte length into token count
+ 
+: intToken ( tokens count -- )
+  \ 1 ?do dup 2@ s>number? cell+ cell+ loop 2@ type
+  \ 1 ?do 2@ 2@ .s rot rot 2@ .s s>number? .s 2drop 2drop 2drop cell+ cell+ loop 2@ s>number? 2drop drop ;
+  \ drop 
+  \ 2@ s>number? 2drop rot rot cell+ cell+
+  \ 2@ s>number? 2drop ;
+  dup 2@ s>number? 2drop swap ( x tokens )
+  cell+ cell+ 2@ s>number? 2drop ;
+
+128 Constant max-line \ the maximum line length
+Create line-buffer max-line 2 + allot \ read buffer
+0 Value fd-in
+
+: open-input ( addr u -- )  r/o open-file throw to fd-in ;
+
+: loadPoints ( )
+	s" in.txt" open-input
+	begin
+		line-buffer max-line fd-in read-line throw ( length not-eof-flag )
+	while ( length )
+		line-buffer swap s"  " split drop intToken
+	repeat drop
+	fd-in close-file throw ;
+
 : test
 	10 0 u+do
 		i 1+ i .
