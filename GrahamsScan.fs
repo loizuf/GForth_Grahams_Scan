@@ -19,7 +19,7 @@
 	\ iterate over the rest
 	3 u+do
 		begin 
-			.s whichSideLocals 0 < while
+			whichSideLocals 0 < while
 				2swap drop drop
 		repeat
 
@@ -46,7 +46,7 @@
 \ : whichSide ( x1 y1 x2 y2 x y -- x1 y1 x2 y2 x y d )
 \	swap >r >r 2swap 2dup r> swap - r> rot - ;
 
-: split ( str len separator len -- tokens count )
+: split ( str len separator len -- tokens count, splits a string by separator )
   here >r 2swap
   begin
     2dup 2,             \ save this token ( addr len )
@@ -60,12 +60,7 @@
   dup negate allot           \ reclaim dictionary
   2 cells / ;                \ turn byte length into token count
  
-: intToken ( tokens count -- )
-  \ 1 ?do dup 2@ s>number? cell+ cell+ loop 2@ type
-  \ 1 ?do 2@ 2@ .s rot rot 2@ .s s>number? .s 2drop 2drop 2drop cell+ cell+ loop 2@ s>number? 2drop drop ;
-  \ drop 
-  \ 2@ s>number? 2drop rot rot cell+ cell+
-  \ 2@ s>number? 2drop ;
+: intToken ( tokens --, convert a line with coordinates to integer )
   dup 2@ s>number? 2drop swap ( x tokens )
   cell+ cell+ 2@ s>number? 2drop ;
 
@@ -75,7 +70,7 @@ Create line-buffer max-line 2 + allot \ read buffer
 
 : open-input ( addr u -- )  r/o open-file throw to fd-in ;
 
-: loadPoints ( )
+: loadPoints ( -- x1 y1 x2 y2 ... xn yn, load points from file on to the stack )
 	s" in.txt" open-input
 	begin
 		line-buffer max-line fd-in read-line throw ( length not-eof-flag )
@@ -84,18 +79,34 @@ Create line-buffer max-line 2 + allot \ read buffer
 	repeat drop
 	fd-in close-file throw ;
 
-: test
-	10 0 u+do
-		i 1+ i .
-	loop ;
+: toString ( n -- s count, convert a number to string ) 
+	0 <<# #s #> #>> s" " s+ ;
 
-0 0 0 3 1 4 1 2 3 5 6 4 3 1 7 0 8
+: concatCoords ( yaddr1 u1 xaddr2 u2 -- addr u, x <space> y )
+	s"  " append 2swap append ;
+
+0 Value fd-out
+: open-output ( addr u -- )  w/o create-file throw to fd-out ;
+: savePoints ( x1 y1 x2 y2 ... xn yn --, save the convex hull coordinates )
+	s" out.txt" open-output
+	0 u+do
+		toString rot toString concatCoords
+		fd-out write-line throw
+	loop
+	fd-out close-file throw ;
+
+loadPoints
 
 \ number of points is on top of the stack, save it in length
-create length , 
+depth 2 / create length , 
 
 \ create an array to save the points in (since it has 2 coordinates its length*2 in length)
-create points length @ 2 * cells allot 
+create points length @ 2 * cells allot
 
 \ pointadr length is put on the stack and array is filled
-points length @ readPoints graham .s
+points length @ readPoints graham
+
+\ save convex hull
+depth 2 / savePoints
+
+bye
