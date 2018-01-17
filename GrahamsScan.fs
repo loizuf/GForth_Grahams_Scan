@@ -42,6 +42,15 @@
 		>r swap over r> i over >r - 1 - cells + ! r>
 	loop 2 / ;
 
+: setPivot
+	over dup ( 2 adresses, x and y coord)
+	@ pivot ! ( save x)
+	cell+ @ pivot cell+ ! ( save y)
+	dup 2 u+do
+		i 2 mod
+		over i cells + @
+	loop
+
 \ solved with locals		 
 \ : whichSide ( x1 y1 x2 y2 x y -- x1 y1 x2 y2 x y d )
 \	swap >r >r 2swap 2dup r> swap - r> rot - ;
@@ -102,6 +111,8 @@ depth 2 / create length ,
 
 \ create an array to save the points in (since it has 2 coordinates its length*2 in length)
 create points length @ 2 * cells allot
+
+create pivot 2 cells allot
 
 \ pointadr length is put on the stack and array is filled
 points length @ readPoints graham
