@@ -80,7 +80,7 @@ Create line-buffer max-line 2 + allot \ read buffer
 : open-input ( addr u -- )  r/o open-file throw to fd-in ;
 
 : loadPoints ( -- x1 y1 x2 y2 ... xn yn, load points from file on to the stack )
-	s" in.txt" open-input
+	s" in_small.txt" open-input
 	begin
 		line-buffer max-line fd-in read-line throw ( length not-eof-flag )
 	while ( length )
@@ -106,6 +106,8 @@ Create line-buffer max-line 2 + allot \ read buffer
 
 loadPoints
 
+.s
+
 \ number of points is on top of the stack, save it in length
 depth 2 / create length , 
 
@@ -116,6 +118,8 @@ create pivot 2 cells allot
 
 \ pointadr length is put on the stack and array is filled
 points length @ readPoints graham
+
+.s
 
 \ save convex hull
 depth 2 / savePoints
