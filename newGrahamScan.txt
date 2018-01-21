@@ -1,0 +1,233 @@
+\ Usage: "2 3 point-matrix points" creates a 2 dimensional array (2x3) named points. We create an array of length |points| and "width" 3 (x coordinate, y coordinate, sorting_value)
+: square ( x -- x^2)
+	dup * ;
+
+: fsquare ( x_e -- [x_e]^2)
+	fdup f* ;
+
+: int-f-div ( x y -- [x/y]e)
+	s>f s>f f/ ;
+
+: f2dup ( a_e b_e -- a_e b_e a_e b_e )
+	fover fover ;
+
+: f-rot ( a_e b_e c_e -- c_e a_e b_e )
+	frot frot ;
+
+\ ---------------------------------------------------------------------------------------------------------
+
+: get-angle ( x_e y_e -- angle )
+	fover 0e f>
+	if ( if x>0, all is normal )
+		1 . fswap f/ fatan ( x y -- atan[y/x] )
+	else
+		fover 0e f<
+		if ( if x<0, add PI )
+			2 . fswap f/ fatan PI f+ ( x y -- atan[y/x] + PI )
+		else
+			3 . fdrop fdrop PI 2e f/ ( if x=0, 'return' PI/2, since float this is improbable )
+		then
+	then ;
+
+: int-get-angle ( x y -- atan[y/x] )
+	swap s>f s>f ( push x_e y_e on the floatstack )
+	get-angle ;
+
+: int-convert-to-polar ( x y -- r phi )
+	2dup 					\ we need it two times for r and for phi
+	square s>f square s>f 	\ x^2 and y^2, both converted to float because we need to get the root in the next step
+	f+ fsqrt 				\ r = sqrt(x^2 + y^2)
+	int-f-div fatan	;		\ atan(y/x)
+
+: float-convert-to-polar ( x y -- r phi )
+	f2dup 					\ we need it two times for r and for phi
+	fsquare fswap fsquare 	\ x^2 and y^2
+	f+ fsqrt 				\ r = sqrt(x^2 + y^2)
+	f-rot 					\ ( x y r -- r x y )
+	fswap f/ fatan ;		\ atan(y/x)
+
+: convert-to-cartesian ( r phi -- xe ye )
+	f2dup
+	fsin f* f-rot
+	fcos f* ;
+
+\ ---------------------------------------------------------------------------------------------------------
+
+: split ( str len separator len -- tokens count, splits a string by separator )
+  here >r 2swap
+  begin
+    2dup 2,             \ save this token ( addr len )
+    2over search        \ find next separator
+  while
+    dup negate  here 2 cells -  +!  \ adjust last token length
+    2over nip /string               \ start next search past separator
+  repeat
+  2drop 2drop
+  r>  here over -   ( tokens length )
+  dup negate allot           \ reclaim dictionary
+  2 cells / ;                \ turn byte length into token count
+ 
+: intToken ( tokens --, convert a line with coordinates to integer )
+  dup 2@ s>number? 2drop swap ( x tokens )
+  cell+ cell+ 2@ s>number? 2drop ;
+
+128 Constant max-line \ the maximum line length
+Create line-buffer max-line 2 + allot \ read buffer
+0 Value fd-in
+
+: open-input ( addr u -- )  r/o open-file throw to fd-in ;
+
+: loadPoints ( -- x1 y1 x2 y2 ... xn yn, load points from file on to the stack )
+	s" in.txt" open-input
+	begin
+		line-buffer max-line fd-in read-line throw ( length not-eof-flag )
+	while ( length )
+		line-buffer swap s"  " split drop intToken
+	repeat drop
+	fd-in close-file throw ;
+
+: toString ( n -- s count, convert a number to string ) 
+	0 <<# #s #> #>> s" " s+ ;
+
+: concatCoords ( yaddr1 u1 xaddr2 u2 -- addr u, x <space> y )
+	s"  " append 2swap append ;
+
+0 Value fd-out
+: open-output ( addr u -- )  w/o create-file throw to fd-out ;
+: savePoints ( x1 y1 x2 y2 ... xn yn --, save the convex hull coordinates )
+	s" out.txt" open-output
+	0 u+do
+		toString rot toString concatCoords
+		fd-out write-line throw
+	loop
+	fd-out close-file throw ;
+
+loadPoints 					\ puts coordinates on stack
+depth 2 / create length , 	\ number of points is on top of the stack, save it in length
+
+\ ----------------------------------------------------------------------------------------------
+
+: point-matrix
+	create ( width height "name" ) over ,  * cells allot
+	does> ( x y -- addr ) dup cell+ >r  @ * + cells r> + ;
+
+length @ 3 point-matrix points
+
+\ sets x and y as coordinates of point with id point_id
+: set-point ( point_id x y -- ) 
+	s>f s>f ( x y -- y_e x_e )
+	1 over 0 ( id -- id 1 id 0 )
+
+	points f!
+	points f! ; ( x_e into slot [id,0] y_e into [id,1] )
+
+\ converts n into the x coordinate of the n-th point (obviously starting at 0)
+: get-point-x ( point_id -- x )
+	0 points f@ ;
+
+\ converts n into the y coordinate of the n-th point (obviously starting at 0)
+: get-point-y ( point_id -- y )
+	1 points f@ ;
+
+\ converts n into the x and y coordinate of the n-th point (obviously starting at 0)
+: get-point ( point_id -- x y )
+	dup 
+	get-point-x 
+	get-point-y ;
+
+\ converts n into the sorting value of the n-th point (obviously starting at 0)
+: get-point-third ( point_id -- sort_crit )
+	2 points f@ ;
+
+\ with x and y value of the pivot point on the stack this calculates the sorting value of every point in this set
+: set-point-third ( point_id x y -- )
+ 	get-angle 2 points f! ;
+
+\ ----------------------------------------------------------------------------------------------
+
+variable minimal-x 1000 , \ finding the minimal-x value to add
+variable minimal-y 1000 , \ finding the minimal-y value to add
+variable minimal-id \ finding the minimal-y value to add
+
+: get-x-from-stack ( x_n y_n ... x_0 y_0 i -- x_n y_n ... x_0 y_0 x_i ) \ assuming that all points are on the stack after each other, put the i-th x-value on the TOS
+	2 * 1 + \ x avlues are at the odd places
+	pick ; 	\ copy that value on the TOS
+
+: get-y-from-stack ( x_n y_n ... x_0 y_0 i -- x_n y_n ... x_0 y_0 y_i ) \ assuming that all points are on the stack after each other, put the i-th y-value on the TOS
+	2 * 	\ y avlues are at the even places
+	pick ; 	\ copy that value on the TOS
+
+: set-minimals-x ( -- )
+	length @ 0 
+	u+do
+		i get-x-from-stack 	\ get i-th x value
+		dup minimal-x @ < 	\ check if smaller than minimal-x value
+		if
+			minimal-x !
+			i get-y-from-stack 	\ set new minimal-x
+			minimal-y !
+			i minimal-id !
+		else
+			drop 			\ drop the value
+		then
+	loop  ; 
+
+: set-minimals-y ( -- )
+	length @ 0 
+	u+do
+		i get-y-from-stack 	\ get i-th x value
+		dup minimal-y @ < 	\ check if smaller than minimal-x value
+		if
+			minimal-y !
+			i get-x-from-stack 	\ set new minimal-x
+			minimal-x !
+			i minimal-id !
+		else
+			drop 			\ drop the value
+		then
+	loop ; 
+
+: make-one-positive-and-fill ( x_n y_n ... x_0 y_0 i --     [all values are shifted such that they are positive and saved in points] )
+	>r
+	minimal-y @ - swap \ subtract minimal-x value and swap
+	minimal-x @ - swap \ subtract minimal-y value and swap
+	2dup 	( x y -- x y x y )
+	r@ -rot ( x y x y -- x y id x y ) swap s>f s>f ( push x_e y_e on the floatstack ) set-point-third
+	r> -rot	( x y -- id x y ) 			set-point ;
+
+: make-all-positive-and-fill ( x_n y_n ... x_0 y_0 --     [all values are shifted such that they are positive and saved in points] )
+	length @ 0
+	u+do
+		i make-one-positive-and-fill
+	loop ; \ after every iteration the next point is at the TOS
+
+\ set-minimals-y
+\ make-all-positive-and-fill 
+length @ point-matrix sorted
+
+: copy-to-sorted ( id to_id-- ) 
+	over 0 points f@
+	dup 0 sorted f!
+	over 1 points f@
+	dup 1 sorted f!
+	swap 2 points f@
+	2 sorted f! ; 
+
+
+fvariable min-angle 1000e ,
+: radial-sort ( -- )
+	minimal-id @ 0 copy-to-sorted
+	length @ 1 
+	u+do
+		length @ i
+		u+do
+			i get-point-third fdup min-angle f<
+			if
+				min-angle f!
+				i minimal-id !
+			then
+		loop
+		minimal-id i copy-to-sorted
+	loop ; 
+
+\ radial-sort
