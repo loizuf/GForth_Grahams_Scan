@@ -19,13 +19,13 @@
 : get-angle ( x_e y_e -- angle )
 	fover 0e f>
 	if ( if x>0, all is normal )
-		1 . fswap f/ fatan ( x y -- atan[y/x] )
+		( 1 . ) fswap f/ fatan ( x y -- atan[y/x] )
 	else
 		fover 0e f<
 		if ( if x<0, add PI )
-			2 . fswap f/ fatan PI f+ ( x y -- atan[y/x] + PI )
+			( 2 . ) fswap f/ fatan PI f+ ( x y -- atan[y/x] + PI )
 		else
-			3 . fdrop fdrop PI 2e f/ ( if x=0, 'return' PI/2, since float this is improbable )
+			( 3 . ) fdrop fdrop PI 2e f/ ( if x=0, 'return' PI/2, since float this is improbable )
 		then
 	then ;
 
@@ -107,47 +107,83 @@ depth 2 / create length , 	\ number of points is on top of the stack, save it in
 
 \ ----------------------------------------------------------------------------------------------
 
-: point-matrix
-	create ( width height "name" ) over ,  * cells allot
-	does> ( x y -- addr ) dup cell+ >r  @ * + cells r> + ;
+\ get size of matrix
+: calculate-matrix-size ( a b -- c )
+	* floats ;
 
-length @ 3 point-matrix points
+: calculate-point-matrix-size ( point_count -- size )
+	3 calculate-matrix-size ;
+
+: advance-to-point ( addr id -- addr ) \ where 
+	3 * floats + ;
 
 \ sets x and y as coordinates of point with id point_id
-: set-point ( point_id x y -- ) 
+: set-point ( addr point_id x y -- ) 
 	s>f s>f ( x y -- y_e x_e )
-	1 over 0 ( id -- id 1 id 0 )
-
-	points f!
-	points f! ; ( x_e into slot [id,0] y_e into [id,1] )
-
-\ converts n into the x coordinate of the n-th point (obviously starting at 0)
-: get-point-x ( point_id -- x )
-	0 points f@ ;
-
-\ converts n into the y coordinate of the n-th point (obviously starting at 0)
-: get-point-y ( point_id -- y )
-	1 points f@ ;
+	advance-to-point 	\ go to x coordinate of point with id 'point_id'
+	dup 				\ we need to store x AND y
+	f! 1 floats + f! ;	\ store x at [id,0] and y at [id,1], CAUTION: order on float stack is 'y_e x_e' at this point
 
 \ converts n into the x and y coordinate of the n-th point (obviously starting at 0)
-: get-point ( point_id -- x y )
-	dup 
-	get-point-x 
-	get-point-y ;
+: get-point ( addr point_id -- x_e y_e )
+	advance-to-point
+	dup
+	f@ 1 floats + f@ ; \ get x_e y_e on the stack from [id,0] and [id,1]
 
 \ converts n into the sorting value of the n-th point (obviously starting at 0)
-: get-point-third ( point_id -- sort_crit )
-	2 points f@ ;
+: get-point-third ( addr point_id -- sort_crit )
+	advance-to-point
+	2 floats + f@ ;
 
 \ with x and y value of the pivot point on the stack this calculates the sorting value of every point in this set
-: set-point-third ( point_id x y -- )
- 	get-angle 2 points f! ;
+: set-point-third ( addr point_id x y -- )
+ 	int-get-angle 
+ 	advance-to-point
+	2 floats + f! ;
 
+
+
+
+\ This is an old attempt, which did not work properly
+\ : point-matrix
+\ 	create ( width height "name" ) over ,  * cells allot
+\ 	does> ( x y -- addr ) dup cell+ >r  @ * + cells r> + ;
+\ 
+\ length @ 3 point-matrix points
+
+\ sets x and y as coordinates of point with id point_id
+\ : set-point ( point_id x y -- ) 
+\ 	s>f s>f ( x y -- y_e x_e )
+\ 	1 over 0 ( id -- id 1 id 0 )
+\ 
+\ 	points f!
+\ 	points f! ; ( x_e into slot [id,0] y_e into [id,1] )
+\ 
+\ \  converts n into the x coordinate of the n-th point (obviously starting at 0)
+\ : get-point-x ( point_id -- x )
+\ 	0 points f@ ;
+\ 
+\ \ converts n into the y coordinate of the n-th point (obviously starting at 0)
+\ : get-point-y ( point_id -- y )
+\ 	1 points f@ ;
+\ 
+\ \ converts n into the x and y coordinate of the n-th point (obviously starting at 0)
+\ : get-point ( point_id -- x y )
+\ 	dup 
+\ 	get-point-x 
+\ 	get-point-y ;
+\ 
+\ \ converts n into the sorting value of the n-th point (obviously starting at 0)
+\ : get-point-third ( point_id -- sort_crit )
+\ 	2 points f@ ;
+\ 
+\ \ with x and y value of the pivot point on the stack this calculates the sorting value of every point in this set
+\ : set-point-third ( point_id x y -- )
+\  	get-angle 2 points f! ;
+\ 
 \ ----------------------------------------------------------------------------------------------
 
-variable minimal-x 1000 , \ finding the minimal-x value to add
-variable minimal-y 1000 , \ finding the minimal-y value to add
-variable minimal-id \ finding the minimal-y value to add
+
 
 : get-x-from-stack ( x_n y_n ... x_0 y_0 i -- x_n y_n ... x_0 y_0 x_i ) \ assuming that all points are on the stack after each other, put the i-th x-value on the TOS
 	2 * 1 + \ x avlues are at the odd places
@@ -157,77 +193,80 @@ variable minimal-id \ finding the minimal-y value to add
 	2 * 	\ y avlues are at the even places
 	pick ; 	\ copy that value on the TOS
 
-: set-minimals-x ( -- )
+: set-minimals-x { a b c } ( addr_min_x addr_min_y addr_min_id -- )
 	length @ 0 
 	u+do
 		i get-x-from-stack 	\ get i-th x value
-		dup minimal-x @ < 	\ check if smaller than minimal-x value
+		dup a @ < 	\ check if smaller than minimal-x value
 		if
-			minimal-x !
+			a !
 			i get-y-from-stack 	\ set new minimal-x
-			minimal-y !
-			i minimal-id !
+			b !
+			i c !
 		else
 			drop 			\ drop the value
 		then
 	loop  ; 
 
-: set-minimals-y ( -- )
+: set-minimals-y { a b c } ( addr_min_x addr_min_y addr_min_id -- )
 	length @ 0 
 	u+do
 		i get-y-from-stack 	\ get i-th x value
-		dup minimal-y @ < 	\ check if smaller than minimal-x value
+		dup b @ < 	\ check if smaller than minimal-x value
 		if
-			minimal-y !
+			b !
 			i get-x-from-stack 	\ set new minimal-x
-			minimal-x !
-			i minimal-id !
+			a !
+			i c !
 		else
 			drop 			\ drop the value
 		then
 	loop ; 
 
-: make-one-positive-and-fill ( x_n y_n ... x_0 y_0 i --     [all values are shifted such that they are positive and saved in points] )
-	>r
-	minimal-y @ - swap \ subtract minimal-x value and swap
-	minimal-x @ - swap \ subtract minimal-y value and swap
-	2dup 	( x y -- x y x y )
-	r@ -rot ( x y x y -- x y id x y ) swap s>f s>f ( push x_e y_e on the floatstack ) set-point-third
-	r> -rot	( x y -- id x y ) 			set-point ;
+: make-one-positive-and-fill { d e f g } ( x_n y_n ... x_0 y_0 addr_minimal_y addr_minimal_x addr i --     [all values are shifted such that they are positive and saved in points] )
+	\ >r >r >r		\ push address of matrix, current id and addr_minimal_x on the return stack
+	d @ - swap 		\ subtract minimal-x value and swap, REMARK addr_minimal_y is currently TOS
+	e @ - swap 	\ subtract minimal-y value and swap
+	2dup	( x y -- x y x y )
+	f g 2swap ( x y x y -- x y addr id x y ) .s 	set-point-third
+	f g 2swap	( x y -- addr id x y ) 			set-point ;
 
-: make-all-positive-and-fill ( x_n y_n ... x_0 y_0 --     [all values are shifted such that they are positive and saved in points] )
+: make-all-positive-and-fill { a b c } ( x_n y_n ... x_0 y_0 addr_minimal_x addr_minimal_y addr --     [all values are shifted such that they are positive and saved in points] )
 	length @ 0
 	u+do
-		i make-one-positive-and-fill
+		b a c i make-one-positive-and-fill
 	loop ; \ after every iteration the next point is at the TOS
 
-\ set-minimals-y
-\ make-all-positive-and-fill 
-length @ point-matrix sorted
+variable minimal-x 1000 , \ finding the minimal-x value to add
+variable minimal-y 1000 , \ finding the minimal-y value to add
+variable minimal-id 0 , \ finding the minimal-y value to add
+create points length @ calculate-point-matrix-size allot \ create the point matrix with the size [|points|, 3]
 
-: copy-to-sorted ( id to_id-- ) 
-	over 0 points f@
-	dup 0 sorted f!
-	over 1 points f@
-	dup 1 sorted f!
-	swap 2 points f@
-	2 sorted f! ; 
+minimal-x minimal-y minimal-id set-minimals-y 			\ set the minimal point to the lowest point
+minimal-x minimal-y points make-all-positive-and-fill 	\ shift all points and fill them into the point-matrix
 
 
-fvariable min-angle 1000e ,
-: radial-sort ( -- )
-	minimal-id @ 0 copy-to-sorted
-	length @ 1 
-	u+do
-		length @ i
-		u+do
-			i get-point-third fdup min-angle f<
-			if
-				min-angle f!
-				i minimal-id !
-			then
-		loop
-		minimal-id i copy-to-sorted
-	loop ; 
-
-\ radial-sort
+\ : copy-to-sorted ( id to_id-- ) 
+\ 	over 0 points f@
+\ 	dup 0 sorted f!
+\ 	over 1 points f@
+\ 	dup 1 sorted f!
+\ 	swap 2 points f@
+\ 	2 sorted f! ; 
+\ 
+\ 
+\ fvariable min-angle 1000e ,
+\ : radial-sort ( -- )
+\ 	minimal-id @ 0 copy-to-sorted
+\ 	length @ 1 
+\ 	u+do
+\ 		length @ i
+\ 		u+do
+\ 			i get-point-third fdup min-angle f<
+\ 			if
+\ 				min-angle f!
+\ 				i minimal-id !
+\ 			then
+\ 		loop
+\ 		minimal-id i copy-to-sorted
+\ 	loop ; 
