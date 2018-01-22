@@ -14,18 +14,27 @@
 : f-rot ( a_e b_e c_e -- c_e a_e b_e )
 	frot frot ;
 
+: 3dup ( x y z -- x y z x y z )
+	2 pick 2 pick 2 pick ;
+
 \ ---------------------------------------------------------------------------------------------------------
+
 
 : get-angle ( x_e y_e -- angle )
 	fover 0e f>
 	if ( if x>0, all is normal )
-		( 1 . ) fswap f/ fatan ( x y -- atan[y/x] )
+		fswap f/ fatan ( x y -- atan[y/x] )
 	else
 		fover 0e f<
 		if ( if x<0, add PI )
-			( 2 . ) fswap f/ fatan PI f+ ( x y -- atan[y/x] + PI )
+			fswap f/ fatan PI f+ ( x y -- atan[y/x] + PI )
 		else
-			( 3 . ) fdrop fdrop PI 2e f/ ( if x=0, 'return' PI/2, since float this is improbable )
+			fdup 0e f=
+			if
+				fdrop fdrop 0e 
+			else
+			fdrop fdrop PI 2e f/ ( if x=0, 'return' PI/2, since float this is improbable )
+			then
 		then
 	then ;
 
@@ -53,6 +62,7 @@
 
 \ ---------------------------------------------------------------------------------------------------------
 
+
 : split ( str len separator len -- tokens count, splits a string by separator )
   here >r 2swap
   begin
@@ -78,7 +88,7 @@ Create line-buffer max-line 2 + allot \ read buffer
 : open-input ( addr u -- )  r/o open-file throw to fd-in ;
 
 : loadPoints ( -- x1 y1 x2 y2 ... xn yn, load points from file on to the stack )
-	s" in.txt" open-input
+	s" in_small_copy.txt" open-input
 	begin
 		line-buffer max-line fd-in read-line throw ( length not-eof-flag )
 	while ( length )
@@ -86,7 +96,7 @@ Create line-buffer max-line 2 + allot \ read buffer
 	repeat drop
 	fd-in close-file throw ;
 
-: toString ( n -- s count, convert a number to string ) 
+: toString ( n -- s count, convert a number to string ) \ CAN THIS BE MODIFIED TO DEAL WITH NEGATIVES?
 	0 <<# #s #> #>> s" " s+ ;
 
 : concatCoords ( yaddr1 u1 xaddr2 u2 -- addr u, x <space> y )
@@ -95,6 +105,7 @@ Create line-buffer max-line 2 + allot \ read buffer
 0 Value fd-out
 : open-output ( addr u -- )  w/o create-file throw to fd-out ;
 : savePoints ( x1 y1 x2 y2 ... xn yn --, save the convex hull coordinates )
+	.s
 	s" out.txt" open-output
 	0 u+do
 		toString rot toString concatCoords
@@ -102,10 +113,12 @@ Create line-buffer max-line 2 + allot \ read buffer
 	loop
 	fd-out close-file throw ;
 
-loadPoints 					\ puts coordinates on stack
+ 
+loadPoints					\ puts coordinates on stack
 depth 2 / create length , 	\ number of points is on top of the stack, save it in length
 
 \ ----------------------------------------------------------------------------------------------
+
 
 \ get size of matrix
 : calculate-matrix-size ( a b -- c )
@@ -116,6 +129,12 @@ depth 2 / create length , 	\ number of points is on top of the stack, save it in
 
 : advance-to-point ( addr id -- addr ) \ where 
 	3 * floats + ;
+
+: float-set-point ( addr point_id [x_e y_e] -- ) \ [x_e y_e] is on float stack 
+	fswap ( x_e y_e -- y_e x_e )
+	advance-to-point 	\ go to x coordinate of point with id 'point_id'
+	dup 				\ we need to store x AND y
+	f! 1 floats + f! ;	\ store x at [id,0] and y at [id,1], CAUTION: order on float stack is 'y_e x_e' at this point
 
 \ sets x and y as coordinates of point with id point_id
 : set-point ( addr point_id x y -- ) 
@@ -136,53 +155,11 @@ depth 2 / create length , 	\ number of points is on top of the stack, save it in
 	2 floats + f@ ;
 
 \ with x and y value of the pivot point on the stack this calculates the sorting value of every point in this set
-: set-point-third ( addr point_id x y -- )
- 	int-get-angle 
+: set-point-third ( addr point_id [angle]] -- ) \ [angle] is on float stack 
  	advance-to-point
 	2 floats + f! ;
 
-
-
-
-\ This is an old attempt, which did not work properly
-\ : point-matrix
-\ 	create ( width height "name" ) over ,  * cells allot
-\ 	does> ( x y -- addr ) dup cell+ >r  @ * + cells r> + ;
-\ 
-\ length @ 3 point-matrix points
-
-\ sets x and y as coordinates of point with id point_id
-\ : set-point ( point_id x y -- ) 
-\ 	s>f s>f ( x y -- y_e x_e )
-\ 	1 over 0 ( id -- id 1 id 0 )
-\ 
-\ 	points f!
-\ 	points f! ; ( x_e into slot [id,0] y_e into [id,1] )
-\ 
-\ \  converts n into the x coordinate of the n-th point (obviously starting at 0)
-\ : get-point-x ( point_id -- x )
-\ 	0 points f@ ;
-\ 
-\ \ converts n into the y coordinate of the n-th point (obviously starting at 0)
-\ : get-point-y ( point_id -- y )
-\ 	1 points f@ ;
-\ 
-\ \ converts n into the x and y coordinate of the n-th point (obviously starting at 0)
-\ : get-point ( point_id -- x y )
-\ 	dup 
-\ 	get-point-x 
-\ 	get-point-y ;
-\ 
-\ \ converts n into the sorting value of the n-th point (obviously starting at 0)
-\ : get-point-third ( point_id -- sort_crit )
-\ 	2 points f@ ;
-\ 
-\ \ with x and y value of the pivot point on the stack this calculates the sorting value of every point in this set
-\ : set-point-third ( point_id x y -- )
-\  	get-angle 2 points f! ;
-\ 
 \ ----------------------------------------------------------------------------------------------
-
 
 
 : get-x-from-stack ( x_n y_n ... x_0 y_0 i -- x_n y_n ... x_0 y_0 x_i ) \ assuming that all points are on the stack after each other, put the i-th x-value on the TOS
@@ -224,11 +201,10 @@ depth 2 / create length , 	\ number of points is on top of the stack, save it in
 	loop ; 
 
 : make-one-positive-and-fill { d e f g } ( x_n y_n ... x_0 y_0 addr_minimal_y addr_minimal_x addr i --     [all values are shifted such that they are positive and saved in points] )
-	\ >r >r >r		\ push address of matrix, current id and addr_minimal_x on the return stack
 	d @ - swap 		\ subtract minimal-x value and swap, REMARK addr_minimal_y is currently TOS
 	e @ - swap 	\ subtract minimal-y value and swap
 	2dup	( x y -- x y x y )
-	f g 2swap ( x y x y -- x y addr id x y ) .s 	set-point-third
+	f g 2swap ( x y x y -- x y addr id x y ) int-get-angle set-point-third
 	f g 2swap	( x y -- addr id x y ) 			set-point ;
 
 : make-all-positive-and-fill { a b c } ( x_n y_n ... x_0 y_0 addr_minimal_x addr_minimal_y addr --     [all values are shifted such that they are positive and saved in points] )
@@ -237,36 +213,133 @@ depth 2 / create length , 	\ number of points is on top of the stack, save it in
 		b a c i make-one-positive-and-fill
 	loop ; \ after every iteration the next point is at the TOS
 
-variable minimal-x 1000 , \ finding the minimal-x value to add
-variable minimal-y 1000 , \ finding the minimal-y value to add
-variable minimal-id 0 , \ finding the minimal-y value to add
+\ -----------------------------------------------------------------------------
+
+
+: copy-to ( addr_sorted id_sorted addr_points id_points -- ) \ copies an entry from one array to another
+	2dup
+	get-point-third		\ we're dealing with floats at this point so this lands on the float stack
+	get-point 			( addr id addr id -- third_e x_e y_e)
+	2dup
+	float-set-point 
+	set-point-third ;	
+
+: radial-sort { a b c d } ( minimal_id min_angle points_sorted points -- ) \ simple selectionsort
+	c 0 d a @ copy-to
+ 	d a @ 256e set-point-third \ set minimal-value to upper threshhold
+ 	length @ 1 
+ 	u+do
+ 		b 256e f!
+ 		length @ 1
+ 		u+do \ it's an O(n^2) loop which is terrible but does not matter
+ 			d i get-point-third fdup b f@ f< \ check if the thir value of point with id i is smaller than the current min_angle
+ 			if \ if so we
+ 				b f! 	\ save the new minimal value in min_angle
+ 				i a ! 	\ and the id of this new minimum
+ 			else \ else discard it
+ 				fdrop
+ 			then
+ 		loop
+ 		c i d a @ copy-to \ minimum of the current round is saved in the next (i-th) entry of the sorted array
+ 		d a @ 256e set-point-third \ set minimal-value to upper threshhold
+ 	loop ; 
+
+: initialize ( addr -- addr 0 addr 1 addr 2 )
+	0 1 ;
+
+: to_the_left ( x_1 y_1 x_2 y_2 x_3 y_3 -- value ) \ this flag NEGATIVE if (x_3,y_3) is to the left, Positive if to the right and 0 othrewise
+	1 fpick \ get x_3
+	6 fpick \ get x_1
+	f-		\ (x_3 - x_1)
+	3 fpick \ get y_2
+	6 fpick \ get y_1
+	f-      \ (y_2 - y_1)
+	f*		\ (x_3 - x_1)(y_2 - y_1)
+
+	1 fpick \ get y_3
+	6 fpick \ get y_1
+	f- 		\ (y_3 - y_1)
+	5 fpick \ get x_2
+	8 fpick \ get x_1
+	f- 		\ (x_2 - x_1)
+	f*		\ (y_3 - y_1)(x_2 - x_1)
+
+	f- 		\ (x_3 - x_1)(y_2 - y_1) - (y_3 - y_1)(x_2 - x_1)
+
+	\ this can be optimized since we actually only need 2 values copied, not all 8
+	6 0
+	u+do
+		fnip \ remove the points
+	loop ;
+
+: graham-condition { b } ( id_1 id_2 id_3 addr -- flag ) \ the three ids of the points we have on the TOS and we want to check
+	b 3 pick get-point
+	b 2 pick get-point
+	b 1 pick get-point 
+	to_the_left 0e f< ; \ place p_1, p_2 and p_3 on the FLOAT stack
+
+: graham-scan { a } ( addr -- addr id_1 id_2 ... id_k )
+	initialize
+	length @ 2
+	u+do
+		i \ push next id (point) on the stack
+		begin
+			a graham-condition invert \ if p_3 is NOT to the left of the line [p_1, p_2]
+		while
+			nip \ remove p_2
+		repeat
+	loop depth ; 
+
+\ -----------------------------------------------------------------------------
+
+
+: test_points 
+	length @ 0
+	u+do
+		dup i get-point dup i get-point-third f. f. f.
+	loop ;
+
+: prepare-for-output { a } ( id_1 id_2 ... id_k addr_sorted size -- x_1 y_1 x_2 y_2 ... x_k y_k size)
+	a 0
+	u+do
+		dup rot ( id addr -- addr addr id )
+		get-point \ point is on the float stack
+	loop 
+	drop
+	\ now all points are on the float stack in reverse order
+	a 0
+	u+do
+		fswap f>s f>s ( [x_e y_e] -- x y ) \ [x_e y_e] were on the float stack
+	loop
+	a ; 
+
+\ --------------------------------------------------------------------------------------
+
+
+variable minimal-x 1000 , 		\ finding the minimal-x value to add
+variable minimal-y 1000 , 		\ finding the minimal-y value to add
+variable minimal-id 0 , 		\ finding the minimal-y value to add
+variable min-angle 256e f,	\ variable for finding the smallest angle
 create points length @ calculate-point-matrix-size allot \ create the point matrix with the size [|points|, 3]
+create points_sorted length @ calculate-point-matrix-size allot \ create the point matrix with the size [|points|, 3]
 
-minimal-x minimal-y minimal-id set-minimals-y 			\ set the minimal point to the lowest point
-minimal-x minimal-y points make-all-positive-and-fill 	\ shift all points and fill them into the point-matrix
+1000 minimal-x ! 1000 minimal-y !
 
+minimal-x minimal-y minimal-id 
+set-minimals-y 			\ set the minimal point to the lowest point
 
-\ : copy-to-sorted ( id to_id-- ) 
-\ 	over 0 points f@
-\ 	dup 0 sorted f!
-\ 	over 1 points f@
-\ 	dup 1 sorted f!
-\ 	swap 2 points f@
-\ 	2 sorted f! ; 
-\ 
-\ 
-\ fvariable min-angle 1000e ,
-\ : radial-sort ( -- )
-\ 	minimal-id @ 0 copy-to-sorted
-\ 	length @ 1 
-\ 	u+do
-\ 		length @ i
-\ 		u+do
-\ 			i get-point-third fdup min-angle f<
-\ 			if
-\ 				min-angle f!
-\ 				i minimal-id !
-\ 			then
-\ 		loop
-\ 		minimal-id i copy-to-sorted
-\ 	loop ; 
+minimal-x minimal-y points 
+make-all-positive-and-fill 	\ shift all points and fill them into the point-matrix
+
+minimal-id min-angle points_sorted points
+radial-sort \ sort points radially
+
+\ points_sorted test_points
+
+points_sorted 
+graham-scan ( addr -- id_1 id_2 ... id_k depth )
+
+points_sorted swap ( id_1 id_2 ... id_k depth -- id_1 id_2 ... id_k addr depth )
+prepare-for-output
+
+savePoints
