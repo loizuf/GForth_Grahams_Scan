@@ -88,7 +88,7 @@ Create line-buffer max-line 2 + allot \ read buffer
 : open-input ( addr u -- )  r/o open-file throw to fd-in ;
 
 : loadPoints ( -- x1 y1 x2 y2 ... xn yn, load points from file on to the stack )
-	s" in_small_copy.txt" open-input
+	s" in.txt" open-input
 	begin
 		line-buffer max-line fd-in read-line throw ( length not-eof-flag )
 	while ( length )
