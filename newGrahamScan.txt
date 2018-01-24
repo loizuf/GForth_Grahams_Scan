@@ -97,22 +97,23 @@ Create line-buffer max-line 2 + allot \ read buffer
 	fd-in close-file throw ;
 
 : toString ( n -- s count, convert a number to string ) \ CAN THIS BE MODIFIED TO DEAL WITH NEGATIVES?
-	0 <<# #s #> #>> s" " s+ ;
+	s>d swap over dabs <<# #s rot sign #> #>> s" " s+ ;
 
 : concatCoords ( yaddr1 u1 xaddr2 u2 -- addr u, x <space> y )
 	s"  " append 2swap append ;
 
 0 Value fd-out
 : open-output ( addr u -- )  w/o create-file throw to fd-out ;
-: savePoints ( x1 y1 x2 y2 ... xn yn --, save the convex hull coordinates )
-	.s
-	s" out.txt" open-output
+Defer get-point-deferred ( -- )
+: savePoints { a } ( id_1 id_2 ... id_k depth addr -- , save the convex hull coordinates )
+    s" out.txt" open-output
 	0 u+do
+		a swap get-point-deferred
+		fswap f>s f>s
 		toString rot toString concatCoords
 		fd-out write-line throw
 	loop
 	fd-out close-file throw ;
-
  
 loadPoints					\ puts coordinates on stack
 depth 2 / create length , 	\ number of points is on top of the stack, save it in length
@@ -339,7 +340,5 @@ radial-sort \ sort points radially
 points_sorted 
 graham-scan ( addr -- id_1 id_2 ... id_k depth )
 
-points_sorted swap ( id_1 id_2 ... id_k depth -- id_1 id_2 ... id_k addr depth )
-prepare-for-output
-
-savePoints
+' get-point IS get-point-deferred
+points_sorted savePoints
