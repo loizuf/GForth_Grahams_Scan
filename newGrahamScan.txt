@@ -105,11 +105,13 @@ Create line-buffer max-line 2 + allot \ read buffer
 0 Value fd-out
 : open-output ( addr u -- )  w/o create-file throw to fd-out ;
 Defer get-point-deferred ( -- )
-: savePoints { a } ( id_1 id_2 ... id_k depth addr -- , save the convex hull coordinates )
+: savePoints { a minx miny } ( id_1 id_2 ... id_k depth addr -- , save the convex hull coordinates )
     s" out.txt" open-output
 	0 u+do
 		a swap get-point-deferred
 		fswap f>s f>s
+		swap minx +
+		swap miny +
 		toString rot toString concatCoords
 		fd-out write-line throw
 	loop
@@ -341,4 +343,4 @@ points_sorted
 graham-scan ( addr -- id_1 id_2 ... id_k depth )
 
 ' get-point IS get-point-deferred
-points_sorted savePoints
+points_sorted minimal-x @ minimal-y @ savePoints
