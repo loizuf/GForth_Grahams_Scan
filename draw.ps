@@ -96,12 +96,12 @@ translate
 [3 5] 6 setdash
 newpath
 minx translatecoord 0 moveto
-maxx translatecoord 0 lineto
+pspan translatecoord minx abs translatecoord sub 0 lineto
 closepath
 stroke
 newpath
 0 miny translatecoord moveto
-0 maxy translatecoord lineto
+0 pspan translatecoord miny abs translatecoord sub lineto
 closepath
 stroke
 [] 0 setdash
