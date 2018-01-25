@@ -91,21 +91,6 @@ w cspan sub 2 idiv minx abs translatecoord add
 h cspan sub 2 idiv miny abs translatecoord add
 translate
 
-1 setlinewidth
-0 setlinecap
-[3 5] 6 setdash
-newpath
-minx translatecoord 0 moveto
-pspan translatecoord minx abs translatecoord sub 0 lineto
-closepath
-stroke
-newpath
-0 miny translatecoord moveto
-0 pspan translatecoord miny abs translatecoord sub lineto
-closepath
-stroke
-[] 0 setdash
-
 /infile (out.txt) (r) file def % open file
 /buff 128 string def % read buffer
 /i 0 def
@@ -139,5 +124,59 @@ count 2 idiv {
     translatecoord exch translatecoord
     drawpoint
 } repeat
+
+
+% coordinate system
+/Helvetica findfont 
+10 scalefont
+setfont
+1 setlinewidth
+0 setlinecap
+[3 5] 6 setdash
+
+/minx_t minx translatecoord def
+/maxx_t pspan translatecoord minx abs translatecoord sub def
+/miny_t miny translatecoord def
+/maxy_t pspan translatecoord miny abs translatecoord sub def
+
+minx_t 0 moveto
+maxx_t 0 lineto
+stroke
+0 miny_t moveto
+0 maxy_t lineto
+stroke
+[] 0 setdash
+
+1 translatecoord -5 moveto
+1 translatecoord 5 lineto
+stroke
+-5 1 translatecoord moveto
+5 1 translatecoord lineto
+stroke
+
+% captions
+maxx_t -5 moveto
+maxx_t 5 lineto
+stroke
+maxx_t 10 moveto
+maxx_t sf div round cvi buff cvs dup stringwidth pop 2 div neg 0 rmoveto show
+
+minx_t -5 moveto
+minx_t 5 lineto
+stroke
+minx_t 10 moveto
+minx_t sf div round cvi buff cvs dup stringwidth pop 2 div neg 0 rmoveto show
+
+-5 maxy_t moveto
+5 maxy_t lineto
+stroke
+10 maxy_t 5 sub moveto
+maxy_t sf div round cvi buff cvs show
+
+-5 miny_t moveto
+5 miny_t lineto
+stroke
+10 miny_t moveto
+miny_t sf div round cvi buff cvs show
 
 showpage
