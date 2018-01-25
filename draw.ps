@@ -1,4 +1,8 @@
-/parsepoint { % (line)
+/w 842 def
+/h 595 def
+<< /PageSize [w h] >> setpagedevice
+
+/parsepoint { % (line -- x y)
     ( ) % (line) ( )
     search { % (post) ( ) (pre)
         exch pop % (y) (x)
@@ -8,29 +12,115 @@
     } ifelse
 } def
 
-/drawpoint { % x y
+/drawpoint { % (x y --)
     2 dict begin
-    4 setlinewidth
+    2 setlinewidth
     1 setlinecap
     newpath moveto 0 0 rlineto stroke
     end
 } def
 
+/infile (in.txt) (r) file def % open file
+/minx 0 def
+/miny 0 def
+/maxx 0 def
+/maxy 0 def
+/buff 128 string def % read buffer
+0 0 0 setrgbcolor
+{
+    infile buff readline {
+        parsepoint
+        
+        dup maxy gt
+        {
+            dup
+            /maxy exch def
+        } if
+
+        dup miny lt
+        {
+            dup
+            /miny exch def
+        } if
+
+        exch
+
+        dup maxx gt
+        {
+            dup
+            /maxx exch def
+        } if
+
+        dup minx lt
+        {
+            dup
+            /minx exch def
+        } if
+        
+    }{
+        pop exit
+    } ifelse
+} loop
+infile closefile
+
+/pspan_w maxx minx sub def % max span x points
+/pspan_h maxy miny sub def % max span y points
+/pspan pspan_w def % max(pspan_w, pspan_h)
+pspan_h pspan gt {
+    /pspan pspan_h def
+} if
+
+/cspan_w w 20 sub def % span x coordinate system
+/cspan_h h 20 sub def % span y coordinate system
+/cspan cspan_w def % min(cspan_w, cspan_h)
+cspan_h cspan lt {
+    /cspan cspan_h def
+} if
+
+/sf 1 def % scale factor
+pspan 0 ne {
+    /sf cspan pspan div def
+} if
+
+/translatecoord { % (x -- tx), multiply with scale factor
+    sf mul floor
+} def
+
+% set new origin for coordinates
+w cspan sub 2 idiv minx abs translatecoord add
+h cspan sub 2 idiv miny abs translatecoord add
+translate
+
+1 setlinewidth
+0 setlinecap
+[3 5] 6 setdash
+newpath
+minx translatecoord 0 moveto
+maxx translatecoord 0 lineto
+closepath
+stroke
+newpath
+0 miny translatecoord moveto
+0 maxy translatecoord lineto
+closepath
+stroke
+[] 0 setdash
+
 /infile (out.txt) (r) file def % open file
 /buff 128 string def % read buffer
 /i 0 def
 1 1 0 setrgbcolor
-4 setlinewidth
-1 setlinecap
+2 setlinewidth
+0 setlinecap
 newpath
 {
     infile buff readline {
         parsepoint
+        translatecoord exch translatecoord exch
         i 0 eq
         {
             moveto
         }{
-        pstack
             lineto
         } ifelse
         /i i 1 add def
@@ -42,18 +132,12 @@ infile closefile
 closepath
 stroke
 
-/infile (in.txt) (r) file def % open file
-/buff 128 string def % read buffer
+% points from in.txt are still on stack
+
 0 0 0 setrgbcolor
-{
-    infile buff readline {
-        parsepoint
-        drawpoint
-    }{
-        pop exit
-    } ifelse
-} loop
-infile closefile
-stroke
+count 2 idiv {
+    translatecoord exch translatecoord
+    drawpoint
+} repeat
 
 showpage
